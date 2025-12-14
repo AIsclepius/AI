@@ -1,0 +1,32 @@
+Epoch 16/20
+Training: Loss=0.0552, Accuracy=0.9802
+Validation: Loss=0.0678, Accuracy=0.9761, Precision=0.9854, Recall=0.9663
+Early stopping triggered! Stopping training at epoch 16
+Training curves saved to: ../results/training_curves.png
+
+Evaluating Test Set: 100%|█████████████████████████████████████████████████████████████████████████████████| 49/49 [00:28<00:00,  1.73it/s]
+
+===== Test Set Evaluation Results =====
+Test Accuracy: 0.9000
+Test Precision: 0.8436
+Test Recall: 0.9821
+Test F1 Score: 0.9076
+
+===== Classification Report =====
+              precision    recall  f1-score   support
+
+      normal       0.98      0.82      0.89       390
+   pneumonia       0.84      0.98      0.91       390
+
+    accuracy                           0.90       780
+   macro avg       0.91      0.90      0.90       780
+weighted avg       0.91      0.90      0.90       780
+
+Confusion matrix saved to: ../results/confusion_matrix.png
+ROC curve saved to: ../results/roc_curve.png
+Attention visualization saved to: ../results/attention_visualization_0.png
+Attention visualization saved to: ../results/attention_visualization_1.png
+Attention visualization saved to: ../results/attention_visualization_2.png
+
+Final model saved to: ../models/checkpoints/final_model.pth
+(base) PS D:\AIsclepius\pneumonia_classifier\code>
