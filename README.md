@@ -1,3 +1,5 @@
+![Qing](https://github.com/user-attachments/assets/d709e088-c175-477e-90d3-6a3e5b7f4746)
+
 # CNN-Transformer Hybrid Model for Medical Image Classification
 
 A PyTorch implementation of a hybrid CNN-Transformer model optimized for medical image classification tasks (specifically designed for chest X-ray analysis with small datasets). This model combines the powerful feature extraction capabilities of CNNs with the sequence modeling strengths of Transformers, with special considerations for limited training data.
