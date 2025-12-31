@@ -14,6 +14,7 @@ import seaborn as sns
 from typing import Tuple, Dict, List, Optional
 from tqdm import tqdm
 from copy import deepcopy  # For copying dataset objects to isolate transforms
+import intel_extension_for_pytorch as ipex # intel extension
 
 # Set random seeds for reproducibility
 torch.manual_seed(42)
@@ -48,7 +49,12 @@ class Config:
         self.CHECKPOINT_DIR = '../models/checkpoints/'
         self.LOG_DIR = '../logs/'
         self.RESULTS_DIR = '../results/'
-        self.DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        if hasattr(torch, 'xpu') and torch.xpu.is_available():
+            self.DEVICE = 'xpu'
+        elif torch.cuda.is_available():
+            self.DEVICE = torch.device('cuda')
+        else:
+            self.DEVICE = torch.device('cpu')
         # CheXNet weights path (user should download separately)
         self.CHEXNET_WEIGHTS_PATH = '../pretrained/model.pth.tar'
         
@@ -707,13 +713,17 @@ def main():
     train_loader, val_loader, test_loader = load_data(cfg)
     
     # Initialize model
-    model = CNNTransformerModel(cfg).to(cfg.DEVICE)
+    # model = CNNTransformerModel(cfg).to(cfg.DEVICE)
+    model = CNNTransformerModel(cfg)
+    model = model.to(memory_format=torch.channels_last) # Optimization for Intel
+    model = model.to(cfg.DEVICE)
     print("\n===== Model Structure =====")
     print(model)
     
     # Define loss function and optimizer
     criterion = nn.BCELoss()  # Binary cross-entropy for binary classification
     optimizer = optim.Adam(model.parameters(), lr=cfg.INIT_LR)  # Lower LR for small data
+    model, optimizer = ipex.optimize(model, optimizer=optimizer, dtype=torch.bfloat16) # ipex optimizer
     
     # Learning rate scheduler
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(

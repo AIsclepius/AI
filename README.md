@@ -6,25 +6,20 @@ A PyTorch implementation of a hybrid CNN-Transformer model optimized for medical
 
 ## Table of Contents
 
-* [Overview](#overview)
-
-* [Model Architecture](#model-architecture)
-
-* [Installation](#installation)
-
-* [Dataset Preparation](#dataset-preparation)
-
-* [Pretrained Weights](#pretrained-weights)
-
-* [Training](#training)
-
-* [Configuration](#configuration)
-
-* [Results](#results)
-
-* [Directory Structure](#directory-structure)
-
-* [Features](#features)
+- [CNN-Transformer Hybrid Model for Medical Image Classification](#cnn-transformer-hybrid-model-for-medical-image-classification)
+  - [Table of Contents](#table-of-contents)
+  - [Overview](#overview)
+  - [Model Architecture](#model-architecture)
+  - [Installation](#installation)
+    - [Prerequisites](#prerequisites)
+    - [Dependencies](#dependencies)
+  - [Dataset Preparation](#dataset-preparation)
+  - [Pretrained Weights](#pretrained-weights)
+  - [Training](#training)
+  - [Configuration](#configuration)
+  - [Results](#results)
+  - [Directory Structure](#directory-structure)
+  - [Features](#features)
 
 ## Overview
 
@@ -81,6 +76,9 @@ Install required packages using pip:
 pip install torch torchvision torchaudio
 
 pip install numpy matplotlib scikit-learn seaborn tqdm
+
+pip install intel-extension-for-pytorch --index-url https://pytorch-extension.intel.com/release-whl/stable/xpu/us/
+
 ```
 
 Or create a `requirements.txt` file:
@@ -99,6 +97,8 @@ scikit-learn>=0.24.2
 seaborn>=0.11.2
 
 tqdm>=4.62.3
+
+intel-extension-for-pytorch==2.8.10+xpu
 ```
 
 Then install with:
