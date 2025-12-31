@@ -1,0 +1,8 @@
+Analysis Time: 2025-12-14 14:22:04
+
+Inference Result: Abnormal
+Confidence: 99.84%
+Inference Time: 2025-12-14 14:21:18
+
+Note: This result is for reference only.
+Final diagnosis should be confirmed by a professional physician.
