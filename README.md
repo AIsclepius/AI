@@ -98,7 +98,7 @@ seaborn>=0.11.2
 
 tqdm>=4.62.3
 
-intel-extension-for-pytorch==2.8.10+xpu
+pip install intel-extension-for-pytorch
 ```
 
 Then install with:
