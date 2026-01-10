@@ -16,6 +16,10 @@ from tqdm import tqdm
 from copy import deepcopy  # For copying dataset objects to isolate transforms
 import intel_extension_for_pytorch as ipex # intel extension
 
+print(f"IPEX Version: {ipex.__version__}")
+# If this prints 'False', you are on CPU mode
+print(f"XPU Available: {hasattr(torch, 'xpu') and torch.xpu.is_available()}")
+
 # Set random seeds for reproducibility
 torch.manual_seed(42)
 np.random.seed(42)
@@ -506,7 +510,9 @@ def train_epoch(model: nn.Module, train_loader: DataLoader,
     pbar = tqdm(train_loader, desc=f"Training Epoch {epoch+1}/{cfg.EPOCHS}")
     
     for batch_idx, (images, labels) in enumerate(pbar):
-        images, labels = images.to(cfg.DEVICE), labels.to(cfg.DEVICE).float().unsqueeze(1)
+        # images, labels = images.to(cfg.DEVICE), labels.to(cfg.DEVICE).float().unsqueeze(1)
+        images = images.to(cfg.DEVICE, memory_format=torch.channels_last) #force channels_last
+        labels = labels.to(cfg.DEVICE).float().unsqueeze(1)
         
         optimizer.zero_grad()
         outputs = model(images)
@@ -555,7 +561,9 @@ def validate(model: nn.Module, val_loader: DataLoader,
     with torch.no_grad():
         pbar = tqdm(val_loader, desc=f"Validation Epoch {epoch+1}/{cfg.EPOCHS}")
         for images, labels in pbar:
-            images, labels = images.to(cfg.DEVICE), labels.to(cfg.DEVICE).float().unsqueeze(1)
+            # images, labels = images.to(cfg.DEVICE), labels.to(cfg.DEVICE).float().unsqueeze(1)
+            images = images.to(cfg.DEVICE, memory_format=torch.channels_last) # force channels_last
+            labels = labels.to(cfg.DEVICE).float().unsqueeze(1)
             
             outputs = model(images)
             loss = criterion(outputs, labels)
@@ -715,15 +723,16 @@ def main():
     # Initialize model
     # model = CNNTransformerModel(cfg).to(cfg.DEVICE)
     model = CNNTransformerModel(cfg)
-    model = model.to(memory_format=torch.channels_last) # Optimization for Intel
-    model = model.to(cfg.DEVICE)
+    # model = model.to(memory_format=torch.channels_last) # Optimization for Intel
+    model = model.to(cfg.DEVICE, memory_format=torch.channels_last)
     print("\n===== Model Structure =====")
     print(model)
     
     # Define loss function and optimizer
     criterion = nn.BCELoss()  # Binary cross-entropy for binary classification
     optimizer = optim.Adam(model.parameters(), lr=cfg.INIT_LR)  # Lower LR for small data
-    model, optimizer = ipex.optimize(model, optimizer=optimizer, dtype=torch.bfloat16) # ipex optimizer
+    #model, optimizer = ipex.optimize(model, optimizer=optimizer, dtype=torch.bfloat16) # ipex optimizer
+    model, optimizer = ipex.optimize(model, optimizer=optimizer)
     
     # Learning rate scheduler
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
