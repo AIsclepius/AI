@@ -354,8 +354,10 @@ class MedicalInferenceApp:
         # Model loading area
         self.model_frame = ttk.LabelFrame(self.control_frame, text=self.lang['model_settings'], padding=10)
         self.model_frame.pack(pady=10, fill=tk.X)
-        
-        self.model_path_var = tk.StringVar(value=os.path.join(os.getcwd(), "model.pth"))
+
+        # Default model selection to final_model.pth in the directory specified in Transformer.py
+        default_model_path = os.path.abspath(os.path.join(os.getcwd(), "..", "models", "checkpoints", "final_model.pth"))
+        self.model_path_var = tk.StringVar(value=default_model_path)
         ttk.Label(self.model_frame, text=self.lang['model_path'], font=self.system_font).pack(anchor=tk.W, pady=5)
         
         # 将模型路径框架定义为实例属性（关键修复）
