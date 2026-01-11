@@ -1,0 +1,21 @@
+# Base AI Libraries (CUDA 12.1 support)
+torch --index-url https://download.pytorch.org/whl/cu121
+torchvision --index-url https://download.pytorch.org/whl/cu121
+numpy
+pillow
+matplotlib
+
+# Web UI
+gradio
+
+# # Core Inference Libraries (Pinned to your current Conda versions)
+# torch==2.5.1 # --index-url https://download.pytorch.org/whl/cu121
+# torchvision==0.20.1 # --index-url https://download.pytorch.org/whl/cu121
+# numpy>=1.21.0
+# pillow
+
+# matplotlib>=3.4.3
+# seaborn>=0.11.2
+# tqdm>=4.62.3
+
+# # intel-extension-for-pytorch
