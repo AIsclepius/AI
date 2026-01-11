@@ -486,7 +486,7 @@ class MedicalInferenceApp:
         """Browse and select model file"""
         model_path = filedialog.askopenfilename(
             title=self.lang['model_settings'],
-            filetypes=[("Model Files", ("*.pth", "*.pth.tar"))]
+            filetypes=[("Model Files", ("*.pth", "*.pth.tar")), ("All Files", "*.*")]
         )
         if model_path:
             self.model_path_var.set(model_path)
@@ -527,7 +527,7 @@ class MedicalInferenceApp:
         """Load and display image"""
         image_path = filedialog.askopenfilename(
             title=self.lang['image_operations'],
-            filetypes=[("Image Files", ("*.jpeg", "*.jpg", "*.png", "*.bmp"))]
+            filetypes=[("Image Files", ("*.jpeg", "*.jpg", "*.png", "*.bmp")), ("All Files", "*.*")]
         )
         
         if not image_path:
