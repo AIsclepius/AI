@@ -77,8 +77,6 @@ pip install torch torchvision torchaudio
 
 pip install numpy matplotlib scikit-learn seaborn tqdm
 
-pip install intel-extension-for-pytorch --index-url https://pytorch-extension.intel.com/release-whl/stable/xpu/us/
-
 ```
 
 Or create a `requirements.txt` file:
@@ -97,8 +95,6 @@ scikit-learn>=0.24.2
 seaborn>=0.11.2
 
 tqdm>=4.62.3
-
-pip install intel-extension-for-pytorch
 ```
 
 Then install with:
