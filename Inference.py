@@ -527,7 +527,7 @@ class MedicalInferenceApp:
         """Load and display image"""
         image_path = filedialog.askopenfilename(
             title=self.lang['image_operations'],
-            filetypes=[("Image Files", "*.jpeg;*.jpg;*.png;*.bmp")]
+            filetypes=[("Image Files", ("*.jpeg", "*.jpg", "*.png", "*.bmp"))]
         )
         
         if not image_path:
