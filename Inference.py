@@ -377,8 +377,8 @@ def run_inference_logic(image, lang_code):
         with open(os.path.join(results_dir, f"{filename_base}.txt"), 'w', encoding='utf-8') as f:
             f.write(result_str)
             
-        # final_msg = result_str + "\n\n" + lang['save_results'].format(results_dir)
-        final_msg = '' # results are saved at the host
+        # issue: results are saved at the host
+        final_msg = result_str # + "\n\n" + lang['save_results'].format(results_dir)
         
         return final_msg, fig
 
