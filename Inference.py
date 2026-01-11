@@ -486,7 +486,7 @@ class MedicalInferenceApp:
         """Browse and select model file"""
         model_path = filedialog.askopenfilename(
             title=self.lang['model_settings'],
-            filetypes=[("Model Files", "*.pth;*.pth.tar")]
+            filetypes=[("Model Files", ("*.pth", "*.pth.tar"))]
         )
         if model_path:
             self.model_path_var.set(model_path)
