@@ -14,12 +14,16 @@ import seaborn as sns
 from typing import Tuple, Dict, List, Optional
 from tqdm import tqdm
 from copy import deepcopy  # For copying dataset objects to isolate transforms
-import intel_extension_for_pytorch as ipex # intel extension
 
-print(f"IPEX Version: {ipex.__version__}")
-# If this prints 'False', you are on CPU mode
-print(f"XPU Available: {hasattr(torch, 'xpu') and torch.xpu.is_available()}")
+HAS_CUDA = torch.cuda.is_available()
+HAS_IPEX = False
 
+try:
+    import intel_extension_for_pytorch as ipex
+    if hasattr(torch, 'xpu') and torch.xpu.is_available():
+        HAS_IPEX = True
+except ImportError:
+    pass
 # Set random seeds for reproducibility
 torch.manual_seed(42)
 np.random.seed(42)
@@ -53,12 +57,15 @@ class Config:
         self.CHECKPOINT_DIR = '../models/checkpoints/'
         self.LOG_DIR = '../logs/'
         self.RESULTS_DIR = '../results/'
-        if hasattr(torch, 'xpu') and torch.xpu.is_available():
-            self.DEVICE = 'xpu'
-        elif torch.cuda.is_available():
+        if HAS_CUDA:
             self.DEVICE = torch.device('cuda')
+            print(f"Device: CUDA ({torch.cuda.get_device_name(0)})")
+        elif HAS_IPEX:
+            self.DEVICE = torch.device('xpu')
+            print(f"Device: XPU ({torch.xpu.get_device_name(0)})")
         else:
             self.DEVICE = torch.device('cpu')
+            print("Device: CPU by default.")
         # CheXNet weights path (user should download separately)
         self.CHEXNET_WEIGHTS_PATH = '../pretrained/model.pth.tar'
         
@@ -510,9 +517,9 @@ def train_epoch(model: nn.Module, train_loader: DataLoader,
     pbar = tqdm(train_loader, desc=f"Training Epoch {epoch+1}/{cfg.EPOCHS}")
     
     for batch_idx, (images, labels) in enumerate(pbar):
-        # images, labels = images.to(cfg.DEVICE), labels.to(cfg.DEVICE).float().unsqueeze(1)
-        images = images.to(cfg.DEVICE, memory_format=torch.channels_last) #force channels_last
-        labels = labels.to(cfg.DEVICE).float().unsqueeze(1)
+        images, labels = images.to(cfg.DEVICE), labels.to(cfg.DEVICE).float().unsqueeze(1)
+        # images = images.to(cfg.DEVICE, memory_format=torch.channels_last) #force channels_last
+        # labels = labels.to(cfg.DEVICE).float().unsqueeze(1)
         
         optimizer.zero_grad()
         outputs = model(images)
@@ -561,9 +568,9 @@ def validate(model: nn.Module, val_loader: DataLoader,
     with torch.no_grad():
         pbar = tqdm(val_loader, desc=f"Validation Epoch {epoch+1}/{cfg.EPOCHS}")
         for images, labels in pbar:
-            # images, labels = images.to(cfg.DEVICE), labels.to(cfg.DEVICE).float().unsqueeze(1)
-            images = images.to(cfg.DEVICE, memory_format=torch.channels_last) # force channels_last
-            labels = labels.to(cfg.DEVICE).float().unsqueeze(1)
+            images, labels = images.to(cfg.DEVICE), labels.to(cfg.DEVICE).float().unsqueeze(1)
+            # images = images.to(cfg.DEVICE, memory_format=torch.channels_last) # force channels_last
+            # labels = labels.to(cfg.DEVICE).float().unsqueeze(1)
             
             outputs = model(images)
             loss = criterion(outputs, labels)
@@ -721,18 +728,16 @@ def main():
     train_loader, val_loader, test_loader = load_data(cfg)
     
     # Initialize model
-    # model = CNNTransformerModel(cfg).to(cfg.DEVICE)
-    model = CNNTransformerModel(cfg)
-    # model = model.to(memory_format=torch.channels_last) # Optimization for Intel
-    model = model.to(cfg.DEVICE, memory_format=torch.channels_last)
+    model = CNNTransformerModel(cfg).to(cfg.DEVICE)
     print("\n===== Model Structure =====")
     print(model)
     
     # Define loss function and optimizer
     criterion = nn.BCELoss()  # Binary cross-entropy for binary classification
     optimizer = optim.Adam(model.parameters(), lr=cfg.INIT_LR)  # Lower LR for small data
-    #model, optimizer = ipex.optimize(model, optimizer=optimizer, dtype=torch.bfloat16) # ipex optimizer
-    model, optimizer = ipex.optimize(model, optimizer=optimizer)
+    if HAS_IPEX and cfg.DEVICE.type == 'xpu':
+        print("IPEX optimization applied.")
+        model, optimizer = ipex.optimize(model, optimizer=optimizer)
     
     # Learning rate scheduler
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
