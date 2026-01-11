@@ -10,6 +10,15 @@ import torchvision
 import torchvision.transforms as transforms
 from datetime import datetime
 
+HAS_CUDA = torch.cuda.is_available()
+HAS_IPEX = False
+
+try:
+    import intel_extension_for_pytorch as ipex
+    if hasattr(torch, 'xpu') and torch.xpu.is_available():
+        HAS_IPEX = True
+except ImportError:
+    pass
 # ----------------------
 # Language Support
 # ----------------------
@@ -118,7 +127,12 @@ class Config:
         self.DROPOUT_RATE = 0.2
         
         # Device configuration
-        self.DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        if HAS_CUDA:
+            self.DEVICE = torch.device('cuda')
+        elif HAS_IPEX:
+            self.DEVICE = torch.device('xpu')
+        else:
+            self.DEVICE = torch.device('cpu') # CPU by default
         
         # Image preprocessing parameters
         self.MEAN = [0.485, 0.485, 0.485]
@@ -491,6 +505,12 @@ class MedicalInferenceApp:
             checkpoint = torch.load(model_path, map_location=self.cfg.DEVICE)
             self.model.load_state_dict(checkpoint)
             self.model.eval()
+
+            if HAS_IPEX and self.cfg.DEVICE.type == 'xpu': ## IPEX optimization
+                try:
+                    self.model= ipex.optimize(self.model)
+                except Exception as e:
+                    pass
             
             # Update status
             self.update_result(self.lang['model_loaded'].format(model_path, self.cfg.DEVICE))
