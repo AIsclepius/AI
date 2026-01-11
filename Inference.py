@@ -280,11 +280,7 @@ class CNNTransformerModel(torch.nn.Module):
         
         return torch.sigmoid(output)
 
-# ----------------------
-# Inference Application Class -- gradio solution -- web UI
-# ----------------------
 def load_model_logic(file_obj, lang_code):
-    """Loads the model from the uploaded file object"""
     global CURRENT_MODEL, CURRENT_CONFIG
     lang = LANGUAGES[lang_code]
     
@@ -295,7 +291,6 @@ def load_model_logic(file_obj, lang_code):
         cfg = Config()
         model = CNNTransformerModel(cfg).to(cfg.DEVICE)
         
-        # Load weights
         checkpoint = torch.load(file_obj.name, map_location=cfg.DEVICE)
         model.load_state_dict(checkpoint)
         model.eval()
@@ -303,13 +298,11 @@ def load_model_logic(file_obj, lang_code):
         CURRENT_MODEL = model
         CURRENT_CONFIG = cfg
         
-        # FIX: Added file_obj.name as the first argument to match the dictionary placeholders
         return lang['model_loaded'].format(file_obj.name, cfg.DEVICE)
     except Exception as e:
         return lang['load_failed'].format(str(e))
 
 def run_inference_logic(image, lang_code):
-    """Runs inference and returns the text result + heatmap plot"""
     global CURRENT_MODEL, CURRENT_CONFIG
     lang = LANGUAGES[lang_code]
     
@@ -320,7 +313,6 @@ def run_inference_logic(image, lang_code):
         return lang['error'].format("Please upload an image"), None
 
     try:
-        # Preprocess
         transform = transforms.Compose([
             transforms.Resize(CURRENT_CONFIG.IMG_SIZE),
             transforms.ToTensor(),
@@ -328,12 +320,10 @@ def run_inference_logic(image, lang_code):
         ])
         input_tensor = transform(image).unsqueeze(0).to(CURRENT_CONFIG.DEVICE)
 
-        # Inference
         with torch.no_grad():
             output = CURRENT_MODEL(input_tensor)
             pred_prob = output.item()
             
-            # Prediction Text
             if lang_code == 'en':
                 pred_class = "Abnormal" if pred_prob > 0.5 else "Normal"
             else:
@@ -342,16 +332,13 @@ def run_inference_logic(image, lang_code):
             confidence = pred_prob if pred_prob > 0.5 else 1 - pred_prob
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-        # Generate Heatmap
         fig = plt.figure(figsize=(10, 5))
         
-        # Subplot 1: Original
         ax1 = fig.add_subplot(1, 2, 1)
         ax1.imshow(image)
-        ax1.set_title("Original Image" if lang_code == 'en' else "原始图像")
+        ax1.set_title(LANGUAGES[lang_code]['original_image'])
         ax1.axis('off')
 
-        # Subplot 2: Heatmap
         attention_weights = CURRENT_MODEL.transformer_encoder.attention_weights
         last_layer_attn = attention_weights[-1]
         avg_attn = last_layer_attn.mean(dim=0)
@@ -369,11 +356,12 @@ def run_inference_logic(image, lang_code):
         ax2 = fig.add_subplot(1, 2, 2)
         ax2.imshow(image.resize(CURRENT_CONFIG.IMG_SIZE))
         heatmap = ax2.imshow(resize_attn, cmap='jet', alpha=0.5)
-        ax2.set_title("Attention Heatmap" if lang_code == 'en' else "注意力热力图")
+        
+        heatmap_title = f"Attention Heatmap - {pred_class}" if lang_code == 'en' else f"注意力热力图 - {pred_class}"
+        ax2.set_title(heatmap_title)
         ax2.axis('off')
         fig.colorbar(heatmap, ax=ax2, shrink=0.6)
 
-        # Result Text
         result_str = (
             f"{lang['inference_result'].format(pred_class)}\n"
             f"{lang['confidence'].format(confidence)}\n"
@@ -381,18 +369,16 @@ def run_inference_logic(image, lang_code):
             f"{lang['note']}"
         )
         
-        # Save results to local folder (Server Side)
         results_dir = os.path.join(os.getcwd(), "inference_results")
         os.makedirs(results_dir, exist_ok=True)
         filename_base = datetime.now().strftime("result_%Y%m%d_%H%M%S")
         
-        # Save image
         fig.savefig(os.path.join(results_dir, f"{filename_base}.png"))
-        # Save text
         with open(os.path.join(results_dir, f"{filename_base}.txt"), 'w', encoding='utf-8') as f:
             f.write(result_str)
             
-        final_msg = result_str + "\n\n" + lang['save_results'].format(results_dir)
+        # final_msg = result_str + "\n\n" + lang['save_results'].format(results_dir)
+        final_msg = '' # results are saved at the host
         
         return final_msg, fig
 
@@ -400,15 +386,31 @@ def run_inference_logic(image, lang_code):
         return lang['error'].format(str(e)), None
 
 # ----------------------
+# Dynamic Language Update Function
+# ----------------------
+def update_ui_language(lang_code):
+    """Updates UI component labels and values based on selected language."""
+    lang = LANGUAGES[lang_code]
+    return (
+        gr.update(value="# " + lang['app_title']),                          # header_md
+        gr.update(value="### 1. " + lang['model_settings']),                # model_header_md
+        gr.update(label=lang['model_path']),                                # model_file
+        gr.update(value=lang['load_model']),                                # load_btn
+        gr.update(value="### 2. " + lang['image_operations']),              # image_header_md
+        gr.update(label=lang['load_image']),                                # img_input
+        gr.update(value=lang['run_inference']),                             # run_btn
+        gr.update(value="### " + lang['inference_results']),                # result_header_md
+        gr.update(label=lang['inference_results']),                         # result_output (Using same key as header)
+        gr.update(label=lang['image_display'])                              # plot_output
+    )
+
+# ----------------------
 # Gradio Web Interface
 # ----------------------
 with gr.Blocks(title="Medical Image AI Inference") as demo:
     
-    # State for language
-    lang_state = gr.State(value="en")
-
-    # Header
-    gr.Markdown("# Medical Image AI Inference System / 医学影像AI推理系统")
+    # Header - Initialized with default language (English)
+    header_md = gr.Markdown("# " + LANGUAGES['en']['app_title'])
     
     with gr.Row():
         lang_dropdown = gr.Dropdown(choices=["en", "zh"], value="en", label="Language / 语言")
@@ -416,22 +418,42 @@ with gr.Blocks(title="Medical Image AI Inference") as demo:
     with gr.Row():
         # Left Column: Controls
         with gr.Column(scale=1):
-            gr.Markdown("### 1. Load Model / 加载模型")
-            model_file = gr.File(label="Upload .pth Model File", file_types=[".pth"])
-            load_btn = gr.Button("Load Model / 加载", variant="secondary")
+            model_header_md = gr.Markdown("### 1. " + LANGUAGES['en']['model_settings'])
+            model_file = gr.File(label=LANGUAGES['en']['model_path'], file_types=[".pth"])
+            load_btn = gr.Button(LANGUAGES['en']['load_model'], variant="secondary")
             load_status = gr.Textbox(label="System Status", interactive=False)
             
-            gr.Markdown("### 2. Upload Image / 上传图像")
-            img_input = gr.Image(type="pil", label="Input Image")
-            run_btn = gr.Button("Run Inference / 运行推理", variant="primary")
+            image_header_md = gr.Markdown("### 2. " + LANGUAGES['en']['image_operations'])
+            img_input = gr.Image(type="pil", label=LANGUAGES['en']['load_image'])
+            run_btn = gr.Button(LANGUAGES['en']['run_inference'], variant="primary")
             
         # Right Column: Results
         with gr.Column(scale=2):
-            gr.Markdown("### Results / 结果")
-            result_output = gr.Textbox(label="Diagnosis Report", lines=6)
-            plot_output = gr.Plot(label="Visualization")
+            result_header_md = gr.Markdown("### " + LANGUAGES['en']['inference_results'])
+            result_output = gr.Textbox(label=LANGUAGES['en']['inference_results'], lines=6)
+            plot_output = gr.Plot(label=LANGUAGES['en']['image_display'])
 
     # Event Handlers
+    
+    # 1. Language Change Handler - Updates all UI text
+    lang_dropdown.change(
+        fn=update_ui_language,
+        inputs=lang_dropdown,
+        outputs=[
+            header_md, 
+            model_header_md, 
+            model_file, 
+            load_btn, 
+            image_header_md, 
+            img_input, 
+            run_btn, 
+            result_header_md, 
+            result_output, 
+            plot_output
+        ]
+    )
+
+    # 2. Logic Handlers
     load_btn.click(
         fn=load_model_logic, 
         inputs=[model_file, lang_dropdown], 
@@ -446,429 +468,3 @@ with gr.Blocks(title="Medical Image AI Inference") as demo:
 
 if __name__ == "__main__":
     demo.launch(server_name="0.0.0.0", server_port=7890)
-
-
-# ----------------------
-# Inference Application Class -- tk solution -- window application
-# ----------------------
-# class MedicalInferenceApp:
-#     def __init__(self, root):
-#         self.root = root
-#         self.current_lang = 'en'  # Default language
-#         self.lang = LANGUAGES[self.current_lang]
-        
-#         # Set cross-platform font
-#         self.system_font = self.get_system_font()
-        
-#         self.root.title(self.lang['app_title'])
-#         self.root.geometry("1200x800")
-#         self.root.configure(bg="#f0f0f0")
-        
-#         # Initialize configuration and model
-#         self.cfg = Config()
-#         self.model = None
-#         self.image_path = None
-#         self.original_image = None
-#         self.processed_image = None
-#         self.inference_result = None  # Store inference result for language switching
-        
-#         # Create necessary directories
-#         self.results_dir = os.path.join(os.getcwd(), "inference_results")
-#         os.makedirs(self.results_dir, exist_ok=True)
-        
-#         # Initialize UI
-#         self.init_ui()
-
-#     def get_system_font(self):
-#         """Get appropriate font for different operating systems"""
-#         system = os.name
-#         if system == 'nt':  # Windows
-#             return ("SimHei", 10)
-#         elif system == 'posix':
-#             # Check if it's macOS or Linux
-#             if os.path.exists('/System/Library/Fonts'):  # macOS
-#                 return ("Heiti TC", 10)
-#             else:  # Linux
-#                 return ("WenQuanYi Micro Hei", 10)
-#         else:
-#             return ("Arial Unicode MS", 10)
-
-#     def init_ui(self):
-#         """Initialize user interface"""
-#         # Header with language switch
-#         header_frame = ttk.Frame(self.root)
-#         header_frame.pack(fill=tk.X)
-        
-#         header = tk.Label(
-#             header_frame, 
-#             text=self.lang['app_title'], 
-#             font=(self.system_font[0], 16, "bold"),
-#             bg="#2c3e50", 
-#             fg="white",
-#             pady=10
-#         )
-#         header.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        
-#         # Language switch button
-#         self.lang_btn = ttk.Button(
-#             header_frame,
-#             text="中文" if self.current_lang == 'en' else "English",
-#             command=self.switch_language
-#         )
-#         self.lang_btn.pack(side=tk.RIGHT, padx=10, pady=10)
-        
-#         # Main frame
-#         main_frame = ttk.Frame(self.root, padding=20)
-#         main_frame.pack(fill=tk.BOTH, expand=True)
-        
-#         # Left control panel
-#         self.control_frame = ttk.LabelFrame(main_frame, text=self.lang['control_panel'], padding=10)
-#         self.control_frame.grid(row=0, column=0, padx=10, pady=10, sticky="ns")
-        
-#         # Model loading area
-#         self.model_frame = ttk.LabelFrame(self.control_frame, text=self.lang['model_settings'], padding=10)
-#         self.model_frame.pack(pady=10, fill=tk.X)
-
-#         # Default model selection to final_model.pth in the directory specified in Transformer.py
-#         default_model_path = os.path.abspath(os.path.join(os.getcwd(), "..", "models", "checkpoints", "final_model.pth"))
-#         self.model_path_var = tk.StringVar(value=default_model_path)
-#         ttk.Label(self.model_frame, text=self.lang['model_path'], font=self.system_font).pack(anchor=tk.W, pady=5)
-        
-#         # 将模型路径框架定义为实例属性（关键修复）
-#         self.model_path_frame = ttk.Frame(self.model_frame)
-#         self.model_path_frame.pack(fill=tk.X)
-        
-#         self.model_path_entry = ttk.Entry(self.model_path_frame, textvariable=self.model_path_var, width=30)
-#         self.model_path_entry.pack(side=tk.LEFT, padx=5, pady=5, fill=tk.X, expand=True)
-        
-#         # 保存浏览按钮的引用（方便后续更新文本）
-#         self.browse_btn = ttk.Button(
-#             self.model_path_frame, 
-#             text=self.lang['browse'], 
-#             command=self.browse_model
-#         )
-#         self.browse_btn.pack(side=tk.LEFT, padx=5)
-        
-#         self.load_model_btn = ttk.Button(
-#             self.model_frame, 
-#             text=self.lang['load_model'], 
-#             command=self.load_model
-#         )
-#         self.load_model_btn.pack(pady=10, fill=tk.X)
-        
-#         # Image operation area
-#         self.image_frame = ttk.LabelFrame(self.control_frame, text=self.lang['image_operations'], padding=10)
-#         self.image_frame.pack(pady=10, fill=tk.X)
-        
-#         self.load_image_btn = ttk.Button(
-#             self.image_frame, 
-#             text=self.lang['load_image'], 
-#             command=self.load_image
-#         )
-#         self.load_image_btn.pack(pady=5, fill=tk.X)
-        
-#         self.infer_btn = ttk.Button(
-#             self.image_frame, 
-#             text=self.lang['run_inference'], 
-#             command=self.run_inference,
-#             state=tk.DISABLED
-#         )
-#         self.infer_btn.pack(pady=5, fill=tk.X)
-        
-#         self.save_btn = ttk.Button(
-#             self.image_frame, 
-#             text=self.lang['save_results'], 
-#             command=self.save_results,
-#             state=tk.DISABLED
-#         )
-#         self.save_btn.pack(pady=5, fill=tk.X)
-        
-#         # Results display area
-#         self.result_frame = ttk.LabelFrame(self.control_frame, text=self.lang['inference_results'], padding=10)
-#         self.result_frame.pack(pady=10, fill=tk.BOTH, expand=True)
-        
-#         self.result_text = tk.Text(self.result_frame, height=10, width=30, state=tk.DISABLED, font=self.system_font)
-#         self.result_text.pack(fill=tk.BOTH, expand=True)
-        
-#         # Right image display area
-#         self.display_frame = ttk.LabelFrame(main_frame, text=self.lang['image_display'], padding=10)
-#         self.display_frame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
-        
-#         # Create image display canvas with proper font
-#         plt.rcParams["font.family"] = [self.system_font[0], "sans-serif"]
-#         self.fig, self.axes = plt.subplots(1, 2, figsize=(10, 5))
-#         self.canvas = FigureCanvasTkAgg(self.fig, master=self.display_frame)
-#         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-        
-#         # Initialize image display
-#         self.axes[0].set_title(self.lang['original_image'])
-#         self.axes[0].axis('off')
-#         self.axes[1].set_title(self.lang['heatmap_placeholder'])
-#         self.axes[1].axis('off')
-#         self.canvas.draw()
-        
-#         # Configure grid weights
-#         main_frame.grid_columnconfigure(1, weight=1)
-#         main_frame.grid_rowconfigure(0, weight=1)
-
-#     def switch_language(self):
-#         """Switch between English and Chinese"""
-#         self.current_lang = 'zh' if self.current_lang == 'en' else 'en'
-#         self.lang = LANGUAGES[self.current_lang]
-        
-#         # Update UI elements
-#         self.root.title(self.lang['app_title'])
-#         self.lang_btn.config(text="中文" if self.current_lang == 'en' else "English")
-        
-#         # Update frame labels
-#         self.control_frame.config(text=self.lang['control_panel'])
-#         self.model_frame.config(text=self.lang['model_settings'])
-#         self.image_frame.config(text=self.lang['image_operations'])
-#         self.result_frame.config(text=self.lang['inference_results'])
-#         self.display_frame.config(text=self.lang['image_display'])
-        
-#         # Update labels
-#         for widget in self.model_frame.winfo_children():
-#             if isinstance(widget, ttk.Label) and widget['text'] in [LANGUAGES['en']['model_path'], LANGUAGES['zh']['model_path']]:
-#                 widget.config(text=self.lang['model_path'])
-        
-#         # Update buttons（修复核心：直接通过保存的按钮引用更新文本）
-#         self.browse_btn.config(text=self.lang['browse'])
-#         self.load_model_btn.config(text=self.lang['load_model'])
-#         self.load_image_btn.config(text=self.lang['load_image'])
-#         self.infer_btn.config(text=self.lang['run_inference'])
-#         self.save_btn.config(text=self.lang['save_results'])
-        
-#         # Update plot titles
-#         self.axes[0].set_title(self.lang['original_image'])
-#         if hasattr(self, 'attention_heatmap_title'):
-#             self.axes[1].set_title(self.attention_heatmap_title)
-#         else:
-#             self.axes[1].set_title(self.lang['heatmap_placeholder'])
-#         self.canvas.draw()
-        
-#         # Update result text if available
-#         if self.inference_result:
-#             pred_class, confidence, timestamp = self.inference_result
-#             result_text = (
-#                 f"{self.lang['inference_result'].format(pred_class)}\n"
-#                 f"{self.lang['confidence'].format(confidence)}\n"
-#                 f"{self.lang['inference_time'].format(timestamp)}\n\n"
-#                 f"{self.lang['note']}"
-#             )
-#             self.update_result(result_text)
-
-#     def browse_model(self):
-#         """Browse and select model file"""
-#         model_path = filedialog.askopenfilename(
-#             title=self.lang['model_settings'],
-#             filetypes=[("Model Files", ("*.pth", "*.pth.tar")), ("All Files", "*.*")]
-#         )
-#         if model_path:
-#             self.model_path_var.set(model_path)
-
-#     def load_model(self):
-#         """Load trained model"""
-#         model_path = self.model_path_var.get()
-#         if not os.path.exists(model_path):
-#             messagebox.showerror(self.lang['warning'], self.lang['model_not_exist'].format(model_path))
-#             return
-            
-#         try:
-#             # Initialize model
-#             self.model = CNNTransformerModel(self.cfg).to(self.cfg.DEVICE)
-#             # Load model weights
-#             checkpoint = torch.load(model_path, map_location=self.cfg.DEVICE)
-#             self.model.load_state_dict(checkpoint)
-#             self.model.eval()
-
-#             if HAS_IPEX and self.cfg.DEVICE.type == 'xpu': ## IPEX optimization
-#                 try:
-#                     self.model= ipex.optimize(self.model)
-#                 except Exception as e:
-#                     pass
-            
-#             # Update status
-#             self.update_result(self.lang['model_loaded'].format(model_path, self.cfg.DEVICE))
-#             messagebox.showinfo(self.lang['load_success'], self.lang['model_load_success'])
-            
-#             # Enable inference button if image is loaded
-#             if self.original_image is not None:
-#                 self.infer_btn.config(state=tk.NORMAL)
-#         except Exception as e:
-#             messagebox.showerror(self.lang['model_load_failed'], self.lang['load_failed_msg'].format(str(e)))
-#             self.update_result(self.lang['load_failed_msg'].format(str(e)))
-
-#     def load_image(self):
-#         """Load and display image"""
-#         image_path = filedialog.askopenfilename(
-#             title=self.lang['image_operations'],
-#             filetypes=[("Image Files", ("*.jpeg", "*.jpg", "*.png", "*.bmp")), ("All Files", "*.*")]
-#         )
-        
-#         if not image_path:
-#             return
-            
-#         try:
-#             # Save image path and original image
-#             self.image_path = image_path
-#             self.original_image = Image.open(image_path).convert('RGB')
-#             self.processed_image = self.preprocess_image()
-            
-#             # Display original image
-#             self.axes[0].clear()
-#             self.axes[0].imshow(self.original_image)
-#             self.axes[0].set_title(self.lang['original_image'])
-#             self.axes[0].axis('off')
-            
-#             # Clear right image
-#             self.axes[1].clear()
-#             self.axes[1].set_title(self.lang['heatmap_placeholder'])
-#             self.axes[1].axis('off')
-            
-#             self.canvas.draw()
-            
-#             # Enable inference button
-#             if self.model is not None:
-#                 self.infer_btn.config(state=tk.NORMAL)
-            
-#             self.update_result(self.lang['image_loaded'].format(os.path.basename(image_path)))
-            
-#         except Exception as e:
-#             messagebox.showerror(self.lang['image_load_failed'], self.lang['image_open_failed'].format(str(e)))
-
-#     def preprocess_image(self):
-#         """Preprocess image to match model input requirements"""
-#         transform = transforms.Compose([
-#             transforms.Resize(self.cfg.IMG_SIZE),
-#             transforms.ToTensor(),
-#             transforms.Normalize(mean=self.cfg.MEAN, std=self.cfg.STD)
-#         ])
-#         return transform(self.original_image).unsqueeze(0)  # Add batch dimension
-
-#     def run_inference(self):
-#         """Perform model inference and display results"""
-#         if not hasattr(self, 'processed_image') or self.processed_image is None:
-#             messagebox.showwarning(self.lang['warning'], self.lang['load_image_first'])
-#             return
-            
-#         if self.model is None:
-#             messagebox.showwarning(self.lang['warning'], self.lang['load_model_first'])
-#             return
-            
-#         try:
-#             # Model inference
-#             with torch.no_grad():
-#                 input_tensor = self.processed_image.to(self.cfg.DEVICE)
-#                 output = self.model(input_tensor)
-#                 pred_prob = output.item()
-#                 # Handle class names for both languages
-#                 if self.current_lang == 'en':
-#                     pred_class = "Abnormal" if pred_prob > 0.5 else "Normal"
-#                 else:
-#                     pred_class = "异常" if pred_prob > 0.5 else "正常"
-#                 confidence = pred_prob if pred_class in ["Abnormal", "异常"] else 1 - pred_prob
-#                 timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            
-#             # Store result for language switching
-#             self.inference_result = (pred_class, confidence, timestamp)
-            
-#             # Get attention weights and generate heatmap
-#             attention_weights = self.model.transformer_encoder.attention_weights
-#             self.generate_attention_heatmap(attention_weights, pred_class, confidence)
-            
-#             # Display results
-#             result_text = (
-#                 f"{self.lang['inference_result'].format(pred_class)}\n"
-#                 f"{self.lang['confidence'].format(confidence)}\n"
-#                 f"{self.lang['inference_time'].format(timestamp)}\n\n"
-#                 f"{self.lang['note']}"
-#             )
-#             self.update_result(result_text)
-            
-#             # Update buttons state
-#             self.infer_btn.config(state=tk.DISABLED)
-#             self.save_btn.config(state=tk.NORMAL)
-            
-#         except Exception as e:
-#             messagebox.showerror(self.lang['inference_failed'], self.lang['analysis_error'].format(str(e)))
-
-#     def generate_attention_heatmap(self, attention_weights, pred_class, confidence):
-#         """Generate and display attention heatmap"""
-#         if not attention_weights:
-#             return
-            
-#         # Process attention weights
-#         last_layer_attn = attention_weights[-1]
-#         avg_attn = last_layer_attn.mean(dim=0)  # Average over all attention heads
-        
-#         # Extract attention related to class token
-#         if avg_attn.shape[0] == 50:  # 1 class token + 49 spatial tokens
-#             class_token_attn = avg_attn[0, 1:]  # Exclude attention to class token itself
-#         else:
-#             class_token_attn = avg_attn.mean(dim=0)
-            
-#         # Reshape to spatial dimensions and upsample
-#         spatial_attn = class_token_attn.view(7, 7).cpu().numpy()
-#         resize_attn = transforms.Resize(self.cfg.IMG_SIZE)(
-#             torch.tensor(spatial_attn).unsqueeze(0)
-#         ).squeeze(0).numpy()
-        
-#         # Create heatmap title (store for language switching)
-#         if self.current_lang == 'en':
-#             self.attention_heatmap_title = f"Attention Heatmap - {pred_class} areas highlighted"
-#         else:
-#             self.attention_heatmap_title = f"注意力热力图 - 突出显示{pred_class}区域"
-        
-#         # Display heatmap
-#         self.axes[1].clear()
-#         self.axes[1].imshow(self.original_image.resize(self.cfg.IMG_SIZE))
-#         heatmap = self.axes[1].imshow(resize_attn, cmap='jet', alpha=0.5)
-#         self.axes[1].set_title(self.attention_heatmap_title)
-#         self.axes[1].axis('off')
-#         self.fig.colorbar(heatmap, ax=self.axes[1], shrink=0.6)
-        
-#         self.canvas.draw()
-
-#     def save_results(self):
-#         """Save inference results and images"""
-#         if not hasattr(self, 'original_image') or self.original_image is None:
-#             return
-            
-#         try:
-#             # Generate unique filename
-#             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-#             base_name = f"result_{timestamp}"
-            
-#             # Save result image
-#             img_save_path = os.path.join(self.results_dir, f"{base_name}.png")
-#             self.fig.savefig(img_save_path, dpi=300, bbox_inches='tight')
-            
-#             # Save result text
-#             result_text = self.result_text.get(1.0, tk.END)
-#             text_save_path = os.path.join(self.results_dir, f"{base_name}.txt")
-#             with open(text_save_path, 'w', encoding='utf-8') as f:
-#                 f.write(self.lang['image_path'].format(self.image_path) + "\n")
-#                 f.write(self.lang['analysis_time'].format(datetime.now().strftime('%Y-%m-%d %H:%M:%S')) + "\n\n")
-#                 f.write(result_text)
-            
-#             self.update_result(f"{self.result_text.get(1.0, tk.END)}\n\n{self.lang['results_saved_to'].format(img_save_path)}")
-#             messagebox.showinfo(self.lang['save_success'], self.lang['results_saved'].format(self.results_dir))
-            
-#         except Exception as e:
-#             messagebox.showerror(self.lang['save_failed'], self.lang['could_not_save'].format(str(e)))
-
-#     def update_result(self, text):
-#         """Update result display area"""
-#         self.result_text.config(state=tk.NORMAL)
-#         self.result_text.delete(1.0, tk.END)
-#         self.result_text.insert(tk.END, text)
-#         self.result_text.config(state=tk.DISABLED)
-
-# ----------------------
-# Main Program Entry
-# ----------------------
-# if __name__ == "__main__":
-    # root = tk.Tk()
-    # app = MedicalInferenceApp(root)
-    # root.mainloop()
